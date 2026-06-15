@@ -1,9 +1,17 @@
 import type { ChatMessage } from './types'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'https://xenominicrm-production.up.railway.app'
+const BASE = (process.env.NEXT_PUBLIC_API_URL || 'https://xenominicrm-production.up.railway.app').replace(/\/$/, '')
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(url, {
+    ...init,
+    mode: 'cors',
+    cache: 'no-store',
+    headers: {
+      Accept: 'application/json',
+      ...(init?.headers || {}),
+    },
+  })
   const payload = await response.json().catch(() => ({}))
 
   if (!response.ok) {
