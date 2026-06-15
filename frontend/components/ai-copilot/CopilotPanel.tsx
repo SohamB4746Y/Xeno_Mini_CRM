@@ -14,22 +14,22 @@ interface EnrichedMessage extends ChatMessageType {
 
 const TOOL_LABELS: Record<string, string> = {
   get_dashboard_summary: 'Dashboard Overview',
+  get_proactive_opportunities: 'Opportunity Scan',
   query_customers: 'Customer Query',
   query_orders: 'Order Analysis',
-  query_customer_orders: 'Customer Orders',
-  get_segment_list: 'Segments List',
-  get_segment_detail: 'Segment Detail',
-  get_campaign_list: 'Campaigns List',
-  get_campaign_detail: 'Campaign Detail',
   create_segment: 'Created Segment',
+  get_segment_insights: 'Segment Insights',
+  suggest_best_channel: 'Channel Analysis',
   create_campaign: 'Created Campaign',
   launch_campaign: 'Launched Campaign',
-  get_proactive_opportunities: 'Opportunity Scan',
-  preview_segment: 'Segment Preview',
-  get_customer_insights: 'Customer Insights',
-  get_segment_insights: 'Segment Insights',
-  get_campaign_performance: 'Campaign Performance',
+  create_and_launch_campaign: 'Campaign Launch',
+  get_campaign_analytics: 'Campaign Analytics',
+  get_existing_segments: 'Segments List',
+  draft_campaign_message: 'Message Draft',
   generate_executive_report: 'Executive Report',
+  get_customer_insights: 'Customer Insights',
+  delete_campaign: 'Deleted Campaign',
+  update_campaign: 'Updated Campaign',
 }
 
 function ToolBadge({ tool }: { tool: string }) {

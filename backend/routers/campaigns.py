@@ -210,3 +210,46 @@ async def list_campaign_communications(
         .limit(page_size)
     )
     return CommunicationListResponse(items=list(result.scalars().all()), total=total, campaign_id=campaign_id)
+
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_200_OK)
+async def delete_campaign(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    campaign = await _get_campaign_or_404(db, campaign_id)
+    name = campaign.name
+    await db.execute(delete(Communication).where(Communication.campaign_id == campaign_id))
+    await db.execute(delete(CampaignAnalytics).where(CampaignAnalytics.campaign_id == campaign_id))
+    await db.delete(campaign)
+    await db.commit()
+    return {"deleted": True, "campaign_id": str(campaign_id), "campaign_name": name}
+
+
+@router.post("/cleanup-zombies")
+async def cleanup_zombie_campaigns(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Remove campaigns that were 'launched' but have 0 sent — failed dispatches."""
+    zombie_query = (
+        select(Campaign.id, Campaign.name)
+        .join(CampaignAnalytics, CampaignAnalytics.campaign_id == Campaign.id)
+        .where(
+            Campaign.status == "running",
+            CampaignAnalytics.total_sent == 0,
+            CampaignAnalytics.total_delivered == 0,
+        )
+    )
+    result = await db.execute(zombie_query)
+    zombies = result.all()
+
+    deleted = []
+    for campaign_id, campaign_name in zombies:
+        await db.execute(delete(Communication).where(Communication.campaign_id == campaign_id))
+        await db.execute(delete(CampaignAnalytics).where(CampaignAnalytics.campaign_id == campaign_id))
+        await db.execute(delete(Campaign).where(Campaign.id == campaign_id))
+        deleted.append({"campaign_id": str(campaign_id), "name": campaign_name})
+
+    await db.commit()
+    return {"deleted_count": len(deleted), "deleted_campaigns": deleted}
+
