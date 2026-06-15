@@ -54,12 +54,17 @@ export interface SegmentListResponse {
 export interface Campaign {
   id: string
   name: string
+  segment_id?: string | null
   channel: string
   status: 'draft' | 'running' | 'completed' | 'paused' | 'failed'
   total_recipients: number
-  launched_at: string | null
-  created_at: string
   message_template?: string
+  ai_generated_message?: boolean
+  ai_generated_segment?: boolean
+  launched_at: string | null
+  completed_at?: string | null
+  created_at: string
+  updated_at?: string
   analytics?: CampaignAnalytics | null
 }
 
@@ -69,16 +74,20 @@ export interface CampaignListResponse {
 }
 
 export interface CampaignAnalytics {
+  id?: string
+  campaign_id?: string
   total_sent: number
   total_delivered: number
   total_opened: number
   total_clicked: number
   total_converted: number
   total_failed: number
+  total_read?: number
   delivery_rate: number
   open_rate: number
   click_rate: number
   conversion_rate: number
+  updated_at?: string
 }
 
 export interface Communication {
@@ -121,9 +130,20 @@ export interface ChatMessage {
   content: string
 }
 
+export interface ActionTaken {
+  type: string
+  campaign_id?: string
+  campaign_name?: string
+  total_recipients?: number
+  segment_id?: string
+  segment_name?: string
+  customer_count?: number
+  [key: string]: unknown
+}
+
 export interface ChatResponse {
   response: string
   tools_used: string[]
-  actions_taken: Array<Record<string, unknown>>
+  actions_taken: ActionTaken[]
   conversation_history: ChatMessage[]
 }

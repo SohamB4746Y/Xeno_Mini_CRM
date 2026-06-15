@@ -2,22 +2,67 @@ import type { ChatMessage } from './types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'https://xenominicrm-production.up.railway.app'
 
-async function safeFetch<T>(url: string, options?: RequestInit): Promise<T> {
+const MAX_RETRIES = 2
+const RETRY_DELAYS = [1000, 2500]
+const REQUEST_TIMEOUT = 25000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function safeFetch<T>(url: string, options?: RequestInit, retries = MAX_RETRIES): Promise<T> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT)
+
   try {
     const response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
     })
+    clearTimeout(timeout)
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => '')
-      throw new Error(`HTTP ${response.status}: ${errorText}`)
+      const message = `HTTP ${response.status}: ${errorText.slice(0, 200)}`
+
+      if (retries > 0 && (response.status >= 500 || response.status === 429)) {
+        const delay = RETRY_DELAYS[MAX_RETRIES - retries] || 2000
+        console.warn(`[API] Retrying ${url} in ${delay}ms (${retries} left)`)
+        await sleep(delay)
+        return safeFetch<T>(url, options, retries - 1)
+      }
+
+      throw new Error(message)
     }
+
     return response.json() as Promise<T>
   } catch (error) {
-    console.error(`API call failed: ${url}`, error)
+    clearTimeout(timeout)
+
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (retries > 0) {
+        const delay = RETRY_DELAYS[MAX_RETRIES - retries] || 2000
+        console.warn(`[API] Timeout, retrying ${url} in ${delay}ms`)
+        await sleep(delay)
+        return safeFetch<T>(url, options, retries - 1)
+      }
+      throw new Error('Request timed out. The backend may still be starting up — please try again.')
+    }
+
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      if (retries > 0) {
+        const delay = RETRY_DELAYS[MAX_RETRIES - retries] || 2000
+        console.warn(`[API] Network error, retrying ${url} in ${delay}ms`)
+        await sleep(delay)
+        return safeFetch<T>(url, options, retries - 1)
+      }
+      throw new Error('Unable to reach the server. Please check your connection and try again.')
+    }
+
     throw error
   }
 }

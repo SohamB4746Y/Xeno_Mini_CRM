@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Filter, LayoutDashboard, Send, Users } from 'lucide-react'
+import { BarChart3, Filter, LayoutDashboard, Send, Users } from 'lucide-react'
 import clsx from 'clsx'
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/customers', label: 'Customers', icon: Users },
   { href: '/segments', label: 'Segments', icon: Filter },
   { href: '/campaigns', label: 'Campaigns', icon: Send },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
 export function Sidebar() {
