@@ -43,16 +43,22 @@ async def list_segments(
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ) -> SegmentListResponse:
-    filters = [Segment.is_active.is_(True)]
-    total = int(await db.scalar(select(func.count(Segment.id)).where(*filters)) or 0)
-    result = await db.execute(
-        select(Segment)
-        .where(*filters)
-        .order_by(Segment.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    return SegmentListResponse(items=list(result.scalars().all()), total=total)
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        filters = [Segment.is_active.is_(True)]
+        total = int(await db.scalar(select(func.count(Segment.id)).where(*filters)) or 0)
+        result = await db.execute(
+            select(Segment)
+            .where(*filters)
+            .order_by(Segment.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return SegmentListResponse(items=list(result.scalars().all()), total=total)
+    except Exception as e:
+        logger.error("Segment list error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/", response_model=SegmentResponse, status_code=status.HTTP_201_CREATED)
