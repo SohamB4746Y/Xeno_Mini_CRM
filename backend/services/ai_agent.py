@@ -28,7 +28,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama-3.3-70b-versatile"
+MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 SYSTEM_PROMPT = """You are ZURI's AI Marketing Intelligence — the embedded AI brain
 of ZURI's CRM system. You are not a chatbot. You are an active participant in
@@ -737,13 +737,23 @@ def _assistant_message_to_dict(message: Any) -> dict[str, Any]:
 
 
 async def _create_groq_completion(messages: list[dict[str, Any]]) -> Any:
-    return await asyncio.to_thread(
-        client.chat.completions.create,
-        model=MODEL,
-        messages=messages,
-        tools=TOOLS,
-        tool_choice="auto",
-    )
+    try:
+        return await asyncio.to_thread(
+            client.chat.completions.create,
+            model=MODEL,
+            messages=messages,
+            tools=TOOLS,
+            tool_choice="auto",
+        )
+    except Exception as exc:
+        error_msg = str(exc).lower()
+        if "rate_limit" in error_msg or "429" in error_msg:
+            logger.warning("Groq rate limit hit: %s", exc)
+            raise RuntimeError(
+                "I'm temporarily at my API limit. Please try again in a few minutes. "
+                "In the meantime, you can use the dashboard and explore campaigns manually."
+            ) from exc
+        raise
 
 
 async def process_chat(

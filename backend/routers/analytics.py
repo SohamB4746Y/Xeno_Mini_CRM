@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -13,6 +14,8 @@ from db.database import get_db
 from models import Campaign, CampaignAnalytics, Communication, Customer, Segment
 from schemas.analytics import CampaignAnalyticsResponse, DashboardMetrics
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -20,62 +23,69 @@ router = APIRouter()
 async def get_dashboard_metrics(
     db: AsyncSession = Depends(get_db),
 ) -> DashboardMetrics:
-    now = datetime.now(UTC)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    try:
+        now = datetime.now(UTC)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    total_customers = int(await db.scalar(select(func.count(Customer.id))) or 0)
-    active_segments = int(await db.scalar(select(func.count(Segment.id)).where(Segment.is_active.is_(True))) or 0)
-    campaigns_this_month = int(
-        await db.scalar(select(func.count(Campaign.id)).where(Campaign.created_at >= month_start)) or 0
-    )
-    total_communications_sent = int(await db.scalar(select(func.coalesce(func.sum(CampaignAnalytics.total_sent), 0))) or 0)
-    average_delivery_rate = float(
-        await db.scalar(
+        total_customers_result = await db.execute(select(func.count(Customer.id)))
+        total_customers = int(total_customers_result.scalar() or 0)
+
+        active_segments_result = await db.execute(select(func.count(Segment.id)).where(Segment.is_active.is_(True)))
+        active_segments = int(active_segments_result.scalar() or 0)
+
+        campaigns_month_result = await db.execute(select(func.count(Campaign.id)).where(Campaign.created_at >= month_start))
+        campaigns_this_month = int(campaigns_month_result.scalar() or 0)
+
+        comms_result = await db.execute(select(func.coalesce(func.sum(CampaignAnalytics.total_sent), 0)))
+        total_communications_sent = int(comms_result.scalar() or 0)
+
+        delivery_result = await db.execute(
             select(func.coalesce(func.avg(CampaignAnalytics.delivery_rate), 0))
             .where(CampaignAnalytics.total_sent > 0)
         )
-        or 0
-    )
-    average_open_rate = float(
-        await db.scalar(
+        average_delivery_rate = float(delivery_result.scalar() or 0)
+
+        open_result = await db.execute(
             select(func.coalesce(func.avg(CampaignAnalytics.open_rate), 0))
             .where(CampaignAnalytics.total_sent > 0)
         )
-        or 0
-    )
+        average_open_rate = float(open_result.scalar() or 0)
 
-    best_result = await db.execute(
-        select(Campaign.name, CampaignAnalytics.open_rate, CampaignAnalytics.click_rate)
-        .join(CampaignAnalytics, CampaignAnalytics.campaign_id == Campaign.id)
-        .order_by(CampaignAnalytics.open_rate.desc())
-        .limit(1)
-    )
-    best_row = best_result.one_or_none()
-    best_campaign: dict[str, Any] | None = None
-    if best_row is not None:
-        best_campaign = {
-            "name": best_row.name,
-            "open_rate": float(best_row.open_rate),
-            "click_rate": float(best_row.click_rate),
-        }
+        best_result = await db.execute(
+            select(Campaign.name, CampaignAnalytics.open_rate, CampaignAnalytics.click_rate)
+            .join(CampaignAnalytics, CampaignAnalytics.campaign_id == Campaign.id)
+            .order_by(CampaignAnalytics.open_rate.desc())
+            .limit(1)
+        )
+        best_row = best_result.one_or_none()
+        best_campaign: dict[str, Any] | None = None
+        if best_row is not None:
+            best_campaign = {
+                "name": best_row.name,
+                "open_rate": float(best_row.open_rate or 0),
+                "click_rate": float(best_row.click_rate or 0),
+            }
 
-    recent_result = await db.execute(
-        select(Campaign)
-        .options(selectinload(Campaign.analytics))
-        .order_by(Campaign.created_at.desc())
-        .limit(5)
-    )
+        recent_result = await db.execute(
+            select(Campaign)
+            .options(selectinload(Campaign.analytics))
+            .order_by(Campaign.created_at.desc())
+            .limit(5)
+        )
 
-    return DashboardMetrics(
-        total_customers=total_customers,
-        active_segments=active_segments,
-        campaigns_this_month=campaigns_this_month,
-        total_communications_sent=total_communications_sent,
-        average_delivery_rate=average_delivery_rate,
-        average_open_rate=average_open_rate,
-        best_campaign=best_campaign,
-        recent_campaigns=list(recent_result.scalars().all()),
-    )
+        return DashboardMetrics(
+            total_customers=total_customers,
+            active_segments=active_segments,
+            campaigns_this_month=campaigns_this_month,
+            total_communications_sent=total_communications_sent,
+            average_delivery_rate=average_delivery_rate,
+            average_open_rate=average_open_rate,
+            best_campaign=best_campaign,
+            recent_campaigns=list(recent_result.scalars().all()),
+        )
+    except Exception as e:
+        logger.error("Dashboard metrics error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/campaigns")

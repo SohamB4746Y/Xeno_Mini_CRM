@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Any, Optional
 
@@ -7,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import get_db
 from services.ai_agent import generate_proactive_insights, process_chat
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -63,7 +66,11 @@ async def chat(
 async def get_insights(
     db: AsyncSession = Depends(get_db),
 ) -> InsightsResponse:
-    cards = await generate_proactive_insights(db)
+    try:
+        cards = await generate_proactive_insights(db)
+    except Exception as e:
+        logger.error("Insights generation failed: %s", e, exc_info=True)
+        cards = []
     return InsightsResponse(
         opportunities=cards,
         generated_at=datetime.now(UTC).isoformat(),

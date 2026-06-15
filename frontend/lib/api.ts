@@ -1,30 +1,30 @@
 import type { ChatMessage } from './types'
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL || 'https://xenominicrm-production.up.railway.app').replace(/\/$/, '')
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'https://xenominicrm-production.up.railway.app'
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    mode: 'cors',
-    cache: 'no-store',
-    headers: {
-      Accept: 'application/json',
-      ...(init?.headers || {}),
-    },
-  })
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    const message = payload?.detail || payload?.message || `Request failed with ${response.status}`
-    throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
+async function safeFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      throw new Error(`HTTP ${response.status}: ${errorText}`)
+    }
+    return response.json() as Promise<T>
+  } catch (error) {
+    console.error(`API call failed: ${url}`, error)
+    throw error
   }
-
-  return payload as T
 }
 
 export const api = {
   dashboard: {
-    getMetrics: () => request(`${BASE}/api/analytics/dashboard`),
+    getMetrics: () => safeFetch(`${BASE}/api/analytics/dashboard`),
   },
   customers: {
     list: (params?: { page?: number; page_size?: number; search?: string; tier?: string; city?: string }) => {
@@ -32,52 +32,47 @@ export const api = {
       Object.entries(params || {}).forEach(([key, value]) => {
         if (value !== undefined && value !== '' && value !== 'all') q.set(key, String(value))
       })
-      return request(`${BASE}/api/customers/?${q.toString()}`)
+      return safeFetch(`${BASE}/api/customers/?${q.toString()}`)
     },
   },
   segments: {
-    list: () => request(`${BASE}/api/segments/`),
+    list: () => safeFetch(`${BASE}/api/segments/`),
     create: (data: object) =>
-      request(`${BASE}/api/segments/`, {
+      safeFetch(`${BASE}/api/segments/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
     preview: (filter_rules: object) =>
-      request(`${BASE}/api/segments/preview`, {
+      safeFetch(`${BASE}/api/segments/preview`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filter_rules }),
       }),
   },
   campaigns: {
-    list: () => request(`${BASE}/api/campaigns/`),
-    get: (id: string) => request(`${BASE}/api/campaigns/${id}`),
+    list: () => safeFetch(`${BASE}/api/campaigns/`),
+    get: (id: string) => safeFetch(`${BASE}/api/campaigns/${id}`),
     create: (data: object) =>
-      request(`${BASE}/api/campaigns/`, {
+      safeFetch(`${BASE}/api/campaigns/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
     launch: (id: string) =>
-      request(`${BASE}/api/campaigns/${id}/launch`, {
+      safeFetch(`${BASE}/api/campaigns/${id}/launch`, {
         method: 'POST',
       }),
-    getCommunications: (id: string) => request(`${BASE}/api/campaigns/${id}/communications`),
-    getAnalytics: () => request(`${BASE}/api/analytics/campaigns`),
+    getCommunications: (id: string) => safeFetch(`${BASE}/api/campaigns/${id}/communications`),
+    getAnalytics: () => safeFetch(`${BASE}/api/analytics/campaigns`),
   },
   ai: {
-    getInsights: () => request(`${BASE}/api/ai/insights`),
+    getInsights: () => safeFetch(`${BASE}/api/ai/insights`),
     chat: (message: string, conversation_history: ChatMessage[]) =>
-      request(`${BASE}/api/ai/chat`, {
+      safeFetch(`${BASE}/api/ai/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, conversation_history }),
       }),
     quickLaunch: (quick_prompt: string) =>
-      request(`${BASE}/api/ai/quick-launch`, {
+      safeFetch(`${BASE}/api/ai/quick-launch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quick_prompt, conversation_history: [] }),
       }),
   },
