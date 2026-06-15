@@ -40,7 +40,7 @@ class SegmentResponse(BaseModel):
     id: UUID
     name: str
     description: Optional[str] = None
-    filter_rules: FilterRules
+    filter_rules: dict[str, Any] = Field(default_factory=dict)
     ai_generated: bool
     prompt_used: Optional[str] = None
     customer_count: int
