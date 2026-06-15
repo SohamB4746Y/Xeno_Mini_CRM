@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 import os
+import re
 
 from dotenv import load_dotenv
 from sqlalchemy import text
@@ -19,7 +20,10 @@ def _database_url() -> str:
     if not url:
         raise RuntimeError("DATABASE_URL is required")
     if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if "sslmode=require" in url and "ssl=" not in url:
+        url = re.sub(r"([?&])sslmode=require(&?)", r"\1ssl=require\2", url)
+        url = url.rstrip("?&")
     return url
 
 
